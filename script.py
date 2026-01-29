@@ -12,48 +12,52 @@ def get_games():
         response = requests.get(url).json()
         elements = response['data']['Catalog']['searchStore']['elements']
         
-        current_free = []
+        free_now = []
         coming_soon = []
+        seen_titles = set() # למניעת כפילויות
 
         for game in elements:
-            promotions = game.get('promotions')
-            if not promotions:
-                continue
+            title = game['title']
+            if title in seen_titles: continue # אם כבר ראינו את המשחק הזה, דלג
             
-            # Extract high quality image
+            promotions = game.get('promotions')
+            if not promotions: continue
+            
+            # שליפת מידע בסיסי
             image = next((img['url'] for img in game['keyImages'] if img['type'] == 'OfferImageWide'), None)
-            original_price = game['price']['totalPrice']['fmtPrice']['originalPrice']
+            price = game['price']['totalPrice']['fmtPrice']['originalPrice']
             slug = game.get('productSlug') or (game.get('catalogNs', {}).get('mappings', [{}])[0].get('pageSlug')) or game.get('urlSlug')
 
-            # Check for "FREE NOW"
-            if promotions.get('promotionalOffers'):
-                offers = promotions['promotionalOffers'][0]['promotionalOffers']
-                for offer in offers:
-                    current_free.append({
-                        'title': game['title'],
-                        'price': original_price,
-                        'end_date': format_date(offer['endDate']),
-                        'link': f"https://www.epicgames.com/store/en-US/p/{slug}",
-                        'image': image
-                    })
+            # בדיקה אם חינמי עכשיו (FREE NOW)
+            current_offers = promotions.get('promotionalOffers')
+            if current_offers and current_offers[0]['promotionalOffers'] and game['price']['totalPrice']['discountPrice'] == 0:
+                offer = current_offers[0]['promotionalOffers'][0]
+                free_now.append({
+                    'title': title,
+                    'price': price,
+                    'end_date': format_date(offer['endDate']),
+                    'link': f"https://www.epicgames.com/store/en-US/p/{slug}",
+                    'image': image
+                })
+                seen_titles.add(title)
 
-            # Check for "COMING SOON"
-            elif promotions.get('upcomingPromotionalOffers'):
-                upcoming = promotions['upcomingPromotionalOffers'][0]['promotionalOffers']
-                for offer in upcoming:
-                    coming_soon.append({
-                        'title': game['title'],
-                        'start_date': format_date(offer['startDate']),
-                        'end_date': format_date(offer['endDate']),
-                        'image': image
-                    })
+            # בדיקה אם יבוא בקרוב (COMING SOON)
+            upcoming_offers = promotions.get('upcomingPromotionalOffers')
+            if upcoming_offers and upcoming_offers[0]['promotionalOffers'] and not (current_offers and current_offers[0]['promotionalOffers']):
+                offer = upcoming_offers[0]['promotionalOffers'][0]
+                coming_soon.append({
+                    'title': title,
+                    'start_date': format_date(offer['startDate']),
+                    'image': image
+                })
+                seen_titles.add(title)
 
-        return current_free, coming_soon
+        return free_now, coming_soon
     except Exception as e:
         print(f"Error: {e}")
         return [], []
 
-def send_msg(message, image):
+def send_to_telegram(message, image):
     token = os.environ['TELEGRAM_TOKEN']
     chat_id = os.environ['TELEGRAM_CHAT_ID']
     url = f"https://api.telegram.org/bot{token}/sendPhoto"
@@ -61,24 +65,25 @@ def send_msg(message, image):
     requests.post(url, data=payload)
 
 if __name__ == "__main__":
-    free_now, soon = get_games()
+    free, soon = get_games()
     
-    # 1. Post(s) for FREE NOW
-    for game in free_now:
+    # שליחת פוסטים למשחקים שחינם עכשיו
+    for game in free:
         msg = (
             f"🔵 *FREE NOW* 🔵\n\n"
             f"🕹 *{game['title']}*\n"
             f"💰 *Original Price:* {game['price']}\n"
-            f"📅 *Free until:* {game['end_date']}\n\n"
-            f"🎁 [CLAIM HERE]({game['link']})"
+            f"📅 *Claim until:* {game['end_date']}\n\n"
+            f"🎁 [GET IT HERE]({game['link']})"
         )
-        send_msg(msg, game['image'])
+        send_to_telegram(msg, game['image'])
 
-    # 2. Post(s) for COMING SOON
+    # שליחת פוסטים למשחקים של שבוע הבא
     for game in soon:
         msg = (
             f"⏳ *COMING SOON* ⏳\n\n"
             f"📦 *{game['title']}*\n"
-            f"📅 *Available:* {game['start_date']} - {game['end_date']}"
+            f"📅 *Starts:* {game['start_date']}\n\n"
+            f"🔔 Stay tuned!"
         )
-        send_msg(msg, game['image'])
+        send_to_telegram(msg, game['image'])
