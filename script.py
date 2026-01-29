@@ -14,43 +14,40 @@ def get_games():
         
         free_now = []
         coming_soon = []
-        seen_titles = set() # למניעת כפילויות
 
         for game in elements:
-            title = game['title']
-            if title in seen_titles: continue # אם כבר ראינו את המשחק הזה, דלג
-            
+            # סינון בסיסי למניעת שליחת "שטויות" שאינן משחקים מלאים
+            if game.get('offerType') != 'BASE_GAME' and 'bundle' not in game.get('categories', []):
+                continue
+
             promotions = game.get('promotions')
             if not promotions: continue
             
-            # שליפת מידע בסיסי
             image = next((img['url'] for img in game['keyImages'] if img['type'] == 'OfferImageWide'), None)
             price = game['price']['totalPrice']['fmtPrice']['originalPrice']
             slug = game.get('productSlug') or (game.get('catalogNs', {}).get('mappings', [{}])[0].get('pageSlug')) or game.get('urlSlug')
 
-            # בדיקה אם חינמי עכשיו (FREE NOW)
+            # בדיקה אם חינמי עכשיו - לוקח רק את הראשון שמצא
             current_offers = promotions.get('promotionalOffers')
             if current_offers and current_offers[0]['promotionalOffers'] and game['price']['totalPrice']['discountPrice'] == 0:
-                offer = current_offers[0]['promotionalOffers'][0]
-                free_now.append({
-                    'title': title,
-                    'price': price,
-                    'end_date': format_date(offer['endDate']),
-                    'link': f"https://www.epicgames.com/store/en-US/p/{slug}",
-                    'image': image
-                })
-                seen_titles.add(title)
+                if len(free_now) < 1: # הגבלה למשחק אחד בלבד
+                    free_now.append({
+                        'title': game['title'],
+                        'price': price,
+                        'end_date': format_date(current_offers[0]['promotionalOffers'][0]['endDate']),
+                        'link': f"https://www.epicgames.com/store/en-US/p/{slug}",
+                        'image': image
+                    })
 
-            # בדיקה אם יבוא בקרוב (COMING SOON)
+            # בדיקה אם יבוא בקרוב - לוקח רק את הראשון שמצא
             upcoming_offers = promotions.get('upcomingPromotionalOffers')
-            if upcoming_offers and upcoming_offers[0]['promotionalOffers'] and not (current_offers and current_offers[0]['promotionalOffers']):
-                offer = upcoming_offers[0]['promotionalOffers'][0]
-                coming_soon.append({
-                    'title': title,
-                    'start_date': format_date(offer['startDate']),
-                    'image': image
-                })
-                seen_titles.add(title)
+            if upcoming_offers and upcoming_offers[0]['promotionalOffers'] and not current_offers:
+                if len(coming_soon) < 1: # הגבלה למשחק אחד בלבד
+                    coming_soon.append({
+                        'title': game['title'],
+                        'start_date': format_date(upcoming_offers[0]['promotionalOffers'][0]['startDate']),
+                        'image': image
+                    })
 
         return free_now, coming_soon
     except Exception as e:
@@ -67,7 +64,7 @@ def send_to_telegram(message, image):
 if __name__ == "__main__":
     free, soon = get_games()
     
-    # שליחת פוסטים למשחקים שחינם עכשיו
+    # שליחת המשחק החינמי היחיד שנבחר
     for game in free:
         msg = (
             f"🔵 *FREE NOW* 🔵\n\n"
@@ -78,7 +75,7 @@ if __name__ == "__main__":
         )
         send_to_telegram(msg, game['image'])
 
-    # שליחת פוסטים למשחקים של שבוע הבא
+    # שליחת המשחק הבא היחיד שנבחר
     for game in soon:
         msg = (
             f"⏳ *COMING SOON* ⏳\n\n"
