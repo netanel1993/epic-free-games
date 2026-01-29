@@ -20,6 +20,11 @@ def get_games():
             if not promotions:
                 continue
             
+            # Extract Image
+            game_image = next((img['url'] for img in game['keyImages'] if img['type'] == 'OfferImageWide'), None)
+            if not game_image:
+                game_image = next((img['url'] for img in game['keyImages'] if img['url']), None)
+
             # Current Free Games
             offers = promotions.get('promotionalOffers')
             if offers and game['price']['totalPrice']['discountPrice'] == 0:
@@ -32,16 +37,17 @@ def get_games():
                     'original_price': game['price']['totalPrice']['fmtPrice']['originalPrice'],
                     'start_date': format_date(promo['startDate']),
                     'end_date': format_date(promo['endDate']),
-                    'image': next((img['url'] for img in game['keyImages'] if img['type'] == 'OfferImageWide'), None)
+                    'image': game_image
                 })
 
             # Upcoming Games
             upcoming_offers = promotions.get('upcomingPromotionalOffers')
-            if upcoming_offers:
+            if upcoming_offers and not (offers and game['price']['totalPrice']['discountPrice'] == 0):
                 u_promo = upcoming_offers[0]['promotionalOffers'][0]
                 upcoming_games.append({
                     'title': game['title'],
-                    'start_date': format_date(u_promo['startDate'])
+                    'start_date': format_date(u_promo['startDate']),
+                    'image': game_image
                 })
 
         return current_games, upcoming_games
@@ -72,7 +78,7 @@ if __name__ == "__main__":
             f"🎮 *CURRENT FREE GAME* 🎮\n\n"
             f"🕹 *{game['title']}*\n"
             f"💰 *Original Price:* {game['original_price']}\n"
-            f"📅 *Valid:* {game['start_date']} - {game['end_date']}\n\n"
+            f"📅 *Valid Until:* {game['end_date']}\n\n"
             f"🎁 [CLAIM NOW]({link})"
         )
         send_telegram_msg(msg, game['image'])
@@ -82,6 +88,7 @@ if __name__ == "__main__":
         msg = (
             f"🔜 *COMING NEXT WEEK* 🔜\n\n"
             f"📦 *{game['title']}*\n"
-            f"📅 *Available from:* {game['start_date']}"
+            f"📅 *Available from:* {game['start_date']}\n\n"
+            f"🔔 Stay tuned!"
         )
-        send_telegram_msg(msg)
+        send_telegram_msg(msg, game['image'])
