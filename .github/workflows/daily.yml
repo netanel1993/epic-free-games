@@ -1,7 +1,7 @@
 name: Epic Games Notifier
 on:
   schedule:
-    - cron: '0 18 * * *' # רץ כל יום ב-20:00 שעון ישראל
+    - cron: '32 19 * * *' # רץ כל יום ב-20:00 שעון ישראל
   workflow_dispatch: # מאפשר להריץ ידנית לבדיקה
 
 jobs:
