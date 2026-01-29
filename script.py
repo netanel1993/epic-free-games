@@ -16,29 +16,36 @@ def get_games():
         coming_soon = []
 
         for game in elements:
+            # פילטר אנושי: רק משחקי בסיס או חבילות ראשיות (מונע הצפה של DLC)
+            if game.get('offerType') not in ['BASE_GAME', 'BUNDLE']:
+                continue
+
             promotions = game.get('promotions')
-            if not promotions: continue
-            
+            if not promotions:
+                continue
+
+            # שליפת מידע ויזואלי
             image = next((img['url'] for img in game['keyImages'] if img['type'] == 'OfferImageWide'), None)
-            price = game['price']['totalPrice']['fmtPrice']['originalPrice']
+            price_info = game['price']['totalPrice']
+            original_price = price_info['fmtPrice']['originalPrice']
             slug = game.get('productSlug') or (game.get('catalogNs', {}).get('mappings', [{}])[0].get('pageSlug')) or game.get('urlSlug')
 
-            # בדיקת משחקים שחינם עכשיו
-            curr_promo = promotions.get('promotionalOffers')
-            if curr_promo and curr_promo[0]['promotionalOffers'] and game['price']['totalPrice']['discountPrice'] == 0:
-                offer = curr_promo[0]['promotionalOffers'][0]
+            # 1. בדיקה ל-FREE NOW (הנחה של 100% פעילה כרגע)
+            curr = promotions.get('promotionalOffers')
+            if curr and curr[0]['promotionalOffers'] and price_info['discountPrice'] == 0:
+                offer = curr[0]['promotionalOffers'][0]
                 free_now.append({
                     'title': game['title'],
-                    'price': price,
+                    'price': original_price,
                     'end': format_date(offer['endDate']),
                     'link': f"https://www.epicgames.com/store/en-US/p/{slug}",
                     'image': image
                 })
 
-            # בדיקת משחקים שיבואו בקרוב - כולל טווח תאריכים מלא
-            next_promo = promotions.get('upcomingPromotionalOffers')
-            if next_promo and next_promo[0]['promotionalOffers'] and not (curr_promo and curr_promo[0]['promotionalOffers']):
-                offer = next_promo[0]['promotionalOffers'][0]
+            # 2. בדיקה ל-COMING SOON (משחקים עם מבצע עתידי בלבד)
+            upcoming = promotions.get('upcomingPromotionalOffers')
+            if upcoming and upcoming[0]['promotionalOffers'] and not (curr and curr[0]['promotionalOffers']):
+                offer = upcoming[0]['promotionalOffers'][0]
                 coming_soon.append({
                     'title': game['title'],
                     'start': format_date(offer['startDate']),
@@ -61,23 +68,23 @@ def send_to_telegram(message, image):
 if __name__ == "__main__":
     free, soon = get_games()
     
-    # פוסטים למשחקים שחינם עכשיו
+    # שליחת המשחקים החינמיים (בדיוק מה שרואים תחת הכחול)
     for game in free:
         msg = (
             f"🔵 *FREE NOW* 🔵\n\n"
             f"🕹 *{game['title']}*\n"
             f"💰 *Original Price:* {game['price']}\n"
-            f"📅 *Claim until:* {game['end']}\n\n"
+            f"📅 *Free until:* {game['end']} at 06:00 PM\n\n"
             f"🎁 [GET IT HERE]({game['link']})"
         )
         send_to_telegram(msg, game['image'])
 
-    # פוסטים למשחקים שיבואו בקרוב (אחד או יותר)
+    # שליחת המשחקים שיבואו שבוע הבא (בדיוק מה שרואים תחת השחור)
     for game in soon:
         msg = (
             f"⏳ *COMING SOON* ⏳\n\n"
             f"📦 *{game['title']}*\n"
-            f"📅 *Valid:* {game['start']} - {game['end']}\n\n"
+            f"📅 *Free:* {game['start']} - {game['end']}\n\n"
             f"🔔 Stay tuned!"
         )
         send_to_telegram(msg, game['image'])
