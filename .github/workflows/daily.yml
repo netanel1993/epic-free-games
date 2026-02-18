@@ -1,22 +1,27 @@
 name: Epic Games Notifier
+
 on:
   schedule:
-    - cron: '0 18 * * *' # רץ כל יום ב-20:00 שעון ישראל
-  workflow_dispatch: # מאפשר להריץ ידנית לבדיקה
+    # יריץ את הבוט בכל יום חמישי בשעה 18:30 שעון ישראל (16:30 UTC)
+    - cron: '30 16 * * 4'
+  workflow_dispatch: # מאפשר לך להריץ את הבוט ידנית מתי שתרצה
 
 jobs:
-  run-bot:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Setup Python
+
+      - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
+          python-version: '3.x'
+
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Run Script
+        run: pip install requests
+
+      - name: Run script
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
